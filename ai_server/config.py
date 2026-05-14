@@ -2,13 +2,14 @@ import os
 from pathlib import Path
 
 # ── PostgreSQL ────────────────────────────────────────────────
-PG_HOST     = os.environ.get("PG_HOST",     "localhost")
-PG_PORT     = os.environ.get("PG_PORT",     "5432")
-PG_USER     = os.environ.get("PG_USER",     "airflow")
-PG_PASSWORD = os.environ.get("PG_PASSWORD", "airflow")
+PG_HOST     = os.environ.get("PG_HOST",     "svc.sel3.cloudtype.app")
+PG_PORT     = os.environ.get("PG_PORT",     "32200")
+PG_USER     = os.environ.get("PG_USER",     "root")
+PG_PASSWORD = os.environ.get("PG_PASSWORD", "root")
+PG_DBNAME   = os.environ.get("PG_DBNAME",   "root")
 
-USER_DB_URL = f"postgresql+asyncpg://{PG_USER}:{PG_PASSWORD}@{PG_HOST}:{PG_PORT}/iloon_users"
-JOB_DB_URL  = f"postgresql+asyncpg://{PG_USER}:{PG_PASSWORD}@{PG_HOST}:{PG_PORT}/iloon_jobs"
+USER_DB_URL = f"postgresql+asyncpg://{PG_USER}:{PG_PASSWORD}@{PG_HOST}:{PG_PORT}/{PG_DBNAME}"
+JOB_DB_URL  = f"postgresql+asyncpg://{PG_USER}:{PG_PASSWORD}@{PG_HOST}:{PG_PORT}/{PG_DBNAME}"
 
 # ── Ollama ────────────────────────────────────────────────────
 OLLAMA_HOST  = os.environ.get("OLLAMA_HOST",  "http://localhost:11434")
