@@ -67,14 +67,3 @@ class SimilarJobsResponse(BaseModel):
     job_id:       str
     similar_jobs: List[JobListItem]
 
-
-# ── Chat ───────────────────────────────────────────────────────
-class ChatRequest(BaseModel):
-    user_id: Optional[str] = None
-    message: str = Field(..., min_length=1, max_length=2000)
-    history: List[dict] = Field(default_factory=list, description="[{role, content}, ...]")
-
-
-class ChatResponse(BaseModel):
-    answer:  str
-    sources: List[str] = Field(default_factory=list, description="참조 공고 ID 목록")
