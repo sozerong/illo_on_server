@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Optional, List
-from sqlalchemy import String, Float, Text, DateTime, ForeignKey, Index
+from sqlalchemy import String, Float, Text, DateTime, ForeignKey, Index, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ..database import UserBase
 
@@ -28,11 +28,15 @@ class Survey(UserBase):
 
     id:          Mapped[str]           = mapped_column(String(36), primary_key=True)
     user_id:     Mapped[str]           = mapped_column(ForeignKey("users.id"), unique=True)
-    job_type:    Mapped[Optional[str]] = mapped_column(String(100))   # 직무
-    region:      Mapped[Optional[str]] = mapped_column(String(100))   # 근무 희망 지역
-    occupation:  Mapped[Optional[str]] = mapped_column(String(100))   # 직업군
-    career_type: Mapped[Optional[str]] = mapped_column(String(20))    # 신입 | 경력
-    education:   Mapped[Optional[str]] = mapped_column(String(50))    # 학력
+    job_type:     Mapped[Optional[str]] = mapped_column(String(100))   # 직무
+    region:       Mapped[Optional[str]] = mapped_column(String(100))   # 근무 희망 지역
+    occupation:   Mapped[Optional[str]] = mapped_column(String(100))   # 직업군
+    career_type:  Mapped[Optional[str]] = mapped_column(String(20))    # 신입 | 경력
+    education:    Mapped[Optional[str]] = mapped_column(String(50))    # 학력
+    university:   Mapped[Optional[str]] = mapped_column(String(200))   # 대학교 이름
+    major:        Mapped[Optional[str]] = mapped_column(String(100))   # 학과
+    career_years: Mapped[Optional[int]] = mapped_column(Integer)       # 경력 연차
+    company_name: Mapped[Optional[str]] = mapped_column(String(200))   # 재직/전직 회사명
     created_at:  Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow)
     updated_at:  Mapped[datetime]      = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

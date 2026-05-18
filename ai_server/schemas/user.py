@@ -7,11 +7,15 @@ from pydantic import BaseModel, Field
 
 # ── Survey ─────────────────────────────────────────────────────────────────────
 class SurveyCreate(BaseModel):
-    job_type:    Optional[str] = Field(None, description="직무 (예: 백엔드 개발)")
-    region:      Optional[str] = Field(None, description="근무 희망 지역")
-    occupation:  Optional[str] = Field(None, description="직업군 (예: IT/개발)")
-    career_type: Optional[str] = Field(None, description="신입 | 경력")
-    education:   Optional[str] = Field(None, description="학력")
+    job_type:     Optional[str] = Field(None, description="직무 (예: 백엔드 개발)")
+    region:       Optional[str] = Field(None, description="근무 희망 지역")
+    occupation:   Optional[str] = Field(None, description="직업군 (예: IT/개발)")
+    career_type:  Optional[str] = Field(None, description="신입 | 경력")
+    education:    Optional[str] = Field(None, description="학력")
+    university:   Optional[str] = Field(None, description="대학교 이름")
+    major:        Optional[str] = Field(None, description="학과")
+    career_years: Optional[int] = Field(None, description="경력 연차 (경력자만)")
+    company_name: Optional[str] = Field(None, description="재직/전직 회사명 (경력자만)")
 
 
 class SurveyUpdate(SurveyCreate):
