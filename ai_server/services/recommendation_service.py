@@ -1,13 +1,12 @@
 """공고 추천 서비스
 
 general_recommend : 설문 데이터 → neural_search → 벡터 기반 추천
-ai_recommend      : 이력서 분석 → neural_search → LLM 매칭 점수 (상위 공고만)
+ai_recommend      : 이력서 분석 → neural_search → 벡터 유사도 점수 기반 추천
 find_similar_jobs : 공고 ID → 같은 텍스트 기반 유사 공고
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import math
 import uuid
@@ -18,7 +17,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.job import Job
 from ..models.user import AIRecommendation, GeneralRecommendation, Document, Survey
-from .ollama_client import get_ollama
 from .opensearch_service import neural_search, build_search_text, search_jobs
 
 logger = logging.getLogger(__name__)
@@ -129,13 +127,7 @@ async def general_recommend(
     return recs
 
 
-# ── AI 추천 (이력서 + Neural Search + LLM 점수) ───────────────
-AI_REC_SYSTEM = """당신은 채용 AI 전문가입니다.
-지원자의 이력서 분석 내용과 공고를 보고 매칭 점수(0~100)와 추천 이유를 JSON으로만 응답하세요.
-
-{"match_score": 85, "reason": "추천 이유 2-3문장"}"""
-
-
+# ── AI 추천 (이력서 기반 Neural Search) ──────────────────────
 async def ai_recommend(
     user_id: str,
     user_db: AsyncSession,
@@ -143,10 +135,9 @@ async def ai_recommend(
     top_k:   int = 5,
 ) -> List[AIRecommendation]:
     """
-    이력서 분석 내용 → neural_search로 후보 공고 추출
-    → Ollama LLM으로 전체 후보 스코어링 → 상위 top_k 저장
+    이력서 텍스트 → neural_search → 벡터 유사도 상위 top_k 저장
+    OpenSearch _score를 match_score로 사용
     """
-    # 최신 이력서 분석
     result = await user_db.execute(
         select(Document)
         .where(Document.user_id == user_id, Document.type == "resume")
@@ -155,75 +146,44 @@ async def ai_recommend(
     )
     analysis = result.scalar_one_or_none()
     if not analysis:
-        logger.info("이력서 분석 없음: user=%s", user_id)
+        logger.info("이력서 없음: user=%s", user_id)
         return []
 
-    resume_ctx = analysis.ai_summary or analysis.original_text or ""
-    query_text = resume_ctx[:500]
+    query_text = (analysis.ai_summary or analysis.original_text or "")[:500]
+    if not query_text:
+        return []
 
-    # Neural Search로 후보 공고 추출 (top_k * 3개)
-    candidates: List[Job] = []
+    items: List[dict] = []
     try:
-        os_result  = await neural_search(query_text=query_text, k=top_k * 3)
-        job_ids    = [item["id"] for item in os_result.get("items", []) if item.get("id")]
-        candidates = await _fetch_jobs_by_ids(job_ids, job_db)
+        os_result = await neural_search(query_text=query_text, k=top_k)
+        items     = [i for i in os_result.get("items", []) if i.get("id")]
     except Exception as e:
         logger.warning("AI 추천 Neural Search 실패 → 최신순 fallback: %s", e)
 
-    if not candidates:
-        res2 = await job_db.execute(
-            select(Job).order_by(Job.created_at.desc()).limit(top_k * 3)
-        )
-        candidates = list(res2.scalars().all())
-
-    if not candidates:
-        return []
-
-    ollama = get_ollama()
-
-    # 전체 후보 스코어링
-    scored: List[tuple] = []
-    for job in candidates:
-        job_summary = (
-            f"제목: {job.title}\n"
-            f"회사: {job.company}\n"
-            f"직무: {job.job_type}\n"
-            f"자격요건: {(job.requirements or '')[:400]}"
-        )
-        messages = [
-            {"role": "system", "content": AI_REC_SYSTEM},
-            {"role": "user",   "content": f"[지원자]\n{resume_ctx[:600]}\n\n[공고]\n{job_summary}"},
-        ]
-        try:
-            raw   = await ollama.chat(messages, temperature=0.2, max_tokens=512)
-            start = raw.find("{")
-            end   = raw.rfind("}") + 1
-            data  = json.loads(raw[start:end]) if start != -1 else {}
-            match_score = float(data.get("match_score", 0))
-            reason      = data.get("reason", "")
-        except Exception as e:
-            logger.warning("LLM 점수 계산 실패 (job=%s): %s", job.id, e)
-            match_score, reason = 0.0, ""
-        scored.append((job, match_score, reason))
-
-    # 점수 내림차순 정렬 → top_k 저장
-    scored.sort(key=lambda x: x[1], reverse=True)
+    if not items:
+        res2 = await job_db.execute(select(Job).order_by(Job.created_at.desc()).limit(top_k))
+        jobs = list(res2.scalars().all())
+        scores_map: dict = {}
+    else:
+        job_ids    = [i["id"] for i in items]
+        scores_map = {i["id"]: i.get("_score") for i in items}
+        jobs       = await _fetch_jobs_by_ids(job_ids, job_db)
 
     await user_db.execute(delete(AIRecommendation).where(AIRecommendation.user_id == user_id))
     recs: List[AIRecommendation] = []
-    for job, match_score, reason in scored[:top_k]:
+    for job in jobs:
         rec = AIRecommendation(
             id          = str(uuid.uuid4()),
             user_id     = user_id,
             job_id      = job.id,
-            match_score = match_score,
-            reason      = reason,
+            match_score = scores_map.get(job.id),
+            reason      = None,
         )
         user_db.add(rec)
         recs.append(rec)
 
     await user_db.commit()
-    logger.info("AI 추천 완료: user=%s → %d건 (후보 %d개 스코어링)", user_id, len(recs), len(scored))
+    logger.info("AI 추천 완료: user=%s → %d건", user_id, len(recs))
     return recs
 
 
