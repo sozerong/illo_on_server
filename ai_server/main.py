@@ -17,6 +17,7 @@ from .routers import (
     importer_router,
     log_router,
     resume_analysis_router,
+    chatbot_router,
 )
 
 logging.basicConfig(
@@ -91,6 +92,7 @@ app.include_router(jobs_router,            prefix="/api/v1")
 app.include_router(importer_router,        prefix="/api/v1")
 app.include_router(log_router,             prefix="/api/v1")
 app.include_router(resume_analysis_router, prefix="/api/v1")
+app.include_router(chatbot_router,         prefix="/api/v1")
 
 
 @app.get("/health", tags=["health"])
